@@ -15,6 +15,8 @@
 
 varying vec2 v_uv;
 uniform float u_time;
+uniform float u_offset_horizontal;
+
 
 const uint RAYMARCHING_MAX_STEPS = 200u;
 const float RAYMARCHING_RADIUS_MIN = 0.001;
@@ -179,7 +181,7 @@ void main() {
     vec2 centered_uv = v_uv - 0.5;
     vec2 canvas_pos = 2.0 * centered_uv * vec2(ratio, 1.0);
     // Camera parameters
-    float cam_rotation_speed = 0.0;//1.5 * offset_horizontal;
+    float cam_rotation_speed = 1.5 * u_offset_horizontal; // u_time; //
     vec3 camera_target = vec3(0.0, 0.95, 0.0);
     vec3 camera_eye = camera_target + vec3(1.5 * sin(cam_rotation_speed), 0.0, 1.5 * cos(cam_rotation_speed));
     float canvas_distance = 1.8;
