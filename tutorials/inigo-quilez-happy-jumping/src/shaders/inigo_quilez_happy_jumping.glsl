@@ -59,9 +59,22 @@ float sdf_sphere(vec3 pos, float radius) {
     return length(pos) - radius;
 }
 
+float sdf_stick(vec3 pos, vec3 a, vec3 b, float ra, float rb) {
+    vec3 ba = b-a;
+    vec3 pa = pos-a;
+    float h = clamp(dot(pa,ba)/dot(ba,ba), 0.0, 1.0);
+    float r = mix(ra, rb, h);
+    return length(pa-h*ba) - r;
+}
+
 float smooth_min(float a, float b, float coeff) {
     float h = max(coeff - abs(a - b), 0.0);
     return min(a, b) - h * h / (coeff * 4.0);
+}
+
+float smooth_max(float a, float b, float coeff) {
+    float h = max(coeff - abs(a - b), 0.0);
+    return max(a, b) + h * h / (coeff * 4.0);
 }
 
 
@@ -74,7 +87,7 @@ CollisionInfo min_collision(CollisionInfo left, CollisionInfo right) {
 }
 
 CollisionInfo sdf_guy(vec3 pos) {
-    float t = 0.5;//fract(globals.time);
+    float t = fract(u_time);
     float y = 4.0 * t * (1.0 - t);
     //let dy = 4.0*(1.0- 2.0*t);
     //let u = normalize(vec2(1.0, -dy));
@@ -87,22 +100,36 @@ CollisionInfo sdf_guy(vec3 pos) {
     //q.yz = vec2(dot(u, q.yz), dot(v, q.yz));
     //q.y = dot(u, q.yz);
     //q.z = dot(v, q.yz);
+
     // Body
     float body = sdf_elipsoid(body_pos, radius);
+
     // Head
     vec3 head_pos = body_pos;//body_pos - vec3(0.0, 0.28, 0.0);
-    float head = sdf_elipsoid(head_pos - vec3(0.0, 0.28, 0.0), vec3(0.2));
-    float back_head = sdf_elipsoid(head_pos - vec3(0.0, 0.28, -0.1), vec3(0.2));
-    // Eye & pupils
     vec3 xmirrored_head_pos = vec3(abs(head_pos.x), head_pos.yz);
+    float head = sdf_elipsoid(head_pos - vec3(0.0, 0.28, 0.0), vec3(0.15, 0.2, 0.23));
+    float back_head = sdf_elipsoid(head_pos - vec3(0.0, 0.28, -0.1), vec3(0.23, 0.2, 0.2));
+    
+    // Eye & pupils
     float eyes = sdf_sphere(xmirrored_head_pos - vec3(0.08, 0.28, 0.16), 0.05);
     float pupils = sdf_sphere(xmirrored_head_pos - vec3(0.09, 0.28, 0.195), 0.02);
-    // Makes the shader crash if I try to merge with elipsoid
-    float eyelids = sdf_elipsoid(head_pos - vec3(0.1, 0.35, 0.15), vec3(0.06, 0.03, 0.05));
+    vec3 eyeylids_pos = xmirrored_head_pos - vec3(0.12, 0.34, 0.15);
+    eyeylids_pos.xy = (mat2(3, 4, -4, 3)/5.0)*eyeylids_pos.xy;
+    float eyelids = sdf_elipsoid(eyeylids_pos, vec3(0.06, 0.035, 0.05));
+    
+    // Mouth
+    float mouth = sdf_elipsoid(head_pos-vec3(0.0, 0.15+3.0*head_pos.x*head_pos.x, 0.15), vec3(0.1, 0.04, 0.2));
+
+    // Ears
+    float ears = sdf_stick(xmirrored_head_pos, vec3(0.1, 0.4, -0.01), vec3(0.2, 0.55, 0.05), 0.01, 0.03);
+
     // Compute sdf result
-    float merged_body = smooth_min(head, back_head, 0.03);
-    merged_body = smooth_min(merged_body, body, 0.1);
-    merged_body = smooth_min(merged_body, eyelids, 0.1);
+    float merged_body = smooth_min(head, back_head, 0.05);
+    merged_body = smooth_min(merged_body, body, 0.15);
+    merged_body = smooth_min(merged_body, eyelids, 0.04);
+    merged_body = smooth_max(merged_body, -mouth, 0.03);
+    merged_body = smooth_min(merged_body, ears, 0.03);
+
     CollisionInfo merged_eyes = min_collision(
         CollisionInfo(pupils, OBJ_ID_PUPILS),
         CollisionInfo(eyes, OBJ_ID_EYES)
