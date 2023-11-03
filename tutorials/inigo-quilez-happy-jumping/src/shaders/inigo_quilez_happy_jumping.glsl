@@ -35,17 +35,21 @@ struct CollisionInfo {
 };
 
 
-vec3 material(uint obj_id) {
+vec3 material(uint obj_id, vec3 pos) {
+    vec3 col = vec3(1.0);
     if (obj_id == OBJ_ID_FLOOR) {
-        return vec3(0.05, 0.1, 0.02);
+        col = vec3(0.05, 0.09, 0.02);
+        float f = -1.0 + 2.0*smoothstep(-0.2, 0.2, sin(18.0*pos.x)+sin(18.0*pos.y)+sin(18.0*pos.z));
+        col += 0.2*f*vec3(0.06, 0.06, 0.02);
+        return col;
     } else if (obj_id == OBJ_ID_BODY) {
-        return vec3(0.2, 0.1, 0.02);
+        col = vec3(0.2, 0.1, 0.02);
     } else if (obj_id == OBJ_ID_EYES) {
-        return vec3(0.4, 0.4, 0.4);
+        col = vec3(0.4, 0.4, 0.4);
     } else if (obj_id == OBJ_ID_PUPILS) {
-        return vec3(0.02);
+        col = vec3(0.02);
     }
-    return vec3(1.0);
+    return col;
 }
 
 
@@ -86,14 +90,14 @@ CollisionInfo min_collision(CollisionInfo left, CollisionInfo right) {
     };
 }
 
-CollisionInfo sdf_guy(vec3 pos) {
+CollisionInfo scene(vec3 pos) {
     float t = fract(u_time);
-    float y = 4.0 * t * (1.0 - t);
+    float jump_y = 4.0 * t * (1.0 - t);
     //let dy = 4.0*(1.0- 2.0*t);
     //let u = normalize(vec2(1.0, -dy));
     //let v = vec2(dy, 1.0);
-    vec3 center = vec3(0.0, y, 0.0);
-    float coeff_y = 0.5 + 0.5 * y;
+    vec3 center = vec3(0.0, jump_y+0.1, 0.0);
+    float coeff_y = 0.5 + 0.5 * jump_y;
     float coeff_z = 1.0 / coeff_y;
     vec3 radius = vec3(0.25, 0.25 * coeff_y, 0.25 * coeff_z);
     vec3 body_pos = pos - center;
@@ -134,17 +138,16 @@ CollisionInfo sdf_guy(vec3 pos) {
         CollisionInfo(pupils, OBJ_ID_PUPILS),
         CollisionInfo(eyes, OBJ_ID_EYES)
     );
-    CollisionInfo guy = min_collision(
+    CollisionInfo guy_collision = min_collision(
         CollisionInfo(merged_body, OBJ_ID_BODY),
                 merged_eyes
 
     );
-    return guy;
-}
 
-CollisionInfo scene(vec3 pos) {
-    CollisionInfo guy_collision = sdf_guy(pos);
-    CollisionInfo floor_collision = CollisionInfo(pos.y + 0.25, OBJ_ID_FLOOR);
+    // Floor
+    float floor_height = -0.1 + 0.05*(sin(2.0*pos.x) + sin(2.0*pos.z));
+    CollisionInfo floor_collision = CollisionInfo(pos.y - floor_height, OBJ_ID_FLOOR);
+
     return min_collision(guy_collision, floor_collision);
 }
 
@@ -230,10 +233,10 @@ void main() {
     vec3 output_col = vec3(0.4, 0.75, 1.0) - 0.7 * direction.y;
     output_col = mix(output_col, horizon_gray_color, exp(-10.0 * direction.y));
     CollisionInfo raymarch_result = cast_ray(camera_eye, direction);
-    vec3 material_color = material(raymarch_result.collided_obj_id);
     if (raymarch_result.collided_obj_id != OBJ_ID_NONE) {
         vec3 collision_pos = camera_eye + raymarch_result.distance * direction;
         vec3 collision_normal = collision_normal(collision_pos);
+        vec3 material_color = material(raymarch_result.collided_obj_id, collision_pos);
         float sun_diffusion = clamp(dot(collision_normal, sun_dir), 0.0, 1.0);
         float sun_shadow = cast_shadow(collision_pos + collision_normal * SHADOW_BIAS, sun_dir);
         float sky_diffusion = clamp(0.5 + 0.5 * dot(collision_normal, sky_dir), 0.0, 1.0);
