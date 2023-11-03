@@ -35,7 +35,6 @@ struct CollisionInfo {
     uint collided_obj_id;
 };
 
-
 vec3 material(uint obj_id, vec3 pos) {
     vec3 col = vec3(1.0);
     if (obj_id == OBJ_ID_FLOOR) {
@@ -54,7 +53,7 @@ vec3 material(uint obj_id, vec3 pos) {
 }
 
 
-float sdf_elipsoid(vec3 pos, vec3 radius) {
+float sdf_ellipsoid(vec3 pos, vec3 radius) {
     float k0 = length(pos / radius);
     float k1 = length(pos / radius / radius);
     return k0 * (k0 - 1.0) / k1;
@@ -113,27 +112,26 @@ CollisionInfo scene(vec3 pos) {
     //q.z = dot(v, q.yz);
 
     // Body
-    float body = sdf_elipsoid(body_pos, radius);
+    float body = sdf_ellipsoid(body_pos, radius);
 
     // Head
     vec3 head_pos = body_pos;//body_pos - vec3(0.0, 0.28, 0.0);
     vec3 xmirrored_head_pos = vec3(abs(head_pos.x), head_pos.yz);
-    float head = sdf_elipsoid(head_pos - vec3(0.0, 0.28, 0.0), vec3(0.15, 0.2, 0.23));
-    float back_head = sdf_elipsoid(head_pos - vec3(0.0, 0.28, -0.1), vec3(0.23, 0.2, 0.2));
+    float head = sdf_ellipsoid(head_pos - vec3(0.0, 0.28, 0.0), vec3(0.15, 0.2, 0.23));
+    float back_head = sdf_ellipsoid(head_pos - vec3(0.0, 0.28, -0.1), vec3(0.23, 0.2, 0.2));
     
     // Eye & pupils
     float eyes = sdf_sphere(xmirrored_head_pos - vec3(0.08, 0.28, 0.16), 0.05);
     float pupils = sdf_sphere(xmirrored_head_pos - vec3(0.09, 0.28, 0.195), 0.02);
     vec3 eyeylids_pos = xmirrored_head_pos - vec3(0.12, 0.34, 0.15);
     eyeylids_pos.xy = (mat2(3, 4, -4, 3)/5.0)*eyeylids_pos.xy;
-    float eyelids = sdf_elipsoid(eyeylids_pos, vec3(0.06, 0.035, 0.05));
+    float eyelids = sdf_ellipsoid(eyeylids_pos, vec3(0.06, 0.035, 0.05));
     
     // Mouth
-    float mouth = sdf_elipsoid(head_pos-vec3(0.0, 0.15+3.0*head_pos.x*head_pos.x, 0.15), vec3(0.1, 0.04, 0.2));
+    float mouth = sdf_ellipsoid(head_pos-vec3(0.0, 0.15+3.0*head_pos.x*head_pos.x, 0.15), vec3(0.1, 0.04, 0.2));
 
     // Ears
     float ears = sdf_stick(xmirrored_head_pos, vec3(0.1, 0.4, -0.01), vec3(0.2, 0.55, 0.05), 0.01, 0.03);
-
 
     // Compute sdf result
     float merged_body = smooth_min(head, back_head, 0.05);
@@ -145,7 +143,6 @@ CollisionInfo scene(vec3 pos) {
     float wrinkles_y = head_pos.y - 0.02 - 2.5*head_pos.x*head_pos.x;
     float wrinkles = 0.001*sin(wrinkles_y*120.0) * (1.0-smoothstep(0.0, 0.1, abs(wrinkles_y)));
     merged_body += wrinkles;
-
 
     CollisionInfo merged_eyes = min_collision(
         CollisionInfo(pupils, OBJ_ID_PUPILS),
@@ -159,7 +156,22 @@ CollisionInfo scene(vec3 pos) {
 
     // Floor
     float floor_height = -0.1 + 0.05*(sin(2.0*pos.x) + sin(2.0*pos.z));
-    CollisionInfo floor_collision = CollisionInfo(pos.y - floor_height, OBJ_ID_FLOOR);
+    float floor_pos = pos.y - floor_height;
+    vec3 floor_repeat = vec3(
+        mod(abs(pos.x), 3.0) - 1.5,
+        pos.y,
+        mod(pos.z+1.5, 3.0) - 1.5
+    );
+    vec2 tree_ids = vec2(floor(abs(pos.x)/3.0), floor((pos.z+1.5)/3.0));
+    float tree_variation = tree_ids.x*111.1 + tree_ids.y*131.7;
+    vec3 tree_radius = vec3(0.7, 1.0+0.5*sin(tree_variation*431.19), 0.7);
+    tree_radius -= 0.1*(sin(pos.x*3.0)+sin(pos.y*4.0)+sin(pos.z*5.0));
+    float bump = sdf_ellipsoid(floor_repeat, tree_radius);
+    float bump_displacement = smoothstep(-0.2, 0.2, sin(18.0*pos.x)+sin(18.0*pos.y)+sin(18.0*pos.z));
+    bump += 0.01*bump_displacement;
+    float merged_ground = smooth_min(floor_pos, bump, 0.7);
+    merged_ground *= 0.7; // Slow down raymarching when scanning the ground to lessen artifacts
+    CollisionInfo floor_collision = CollisionInfo(merged_ground, OBJ_ID_FLOOR);
 
     return min_collision(guy_collision, floor_collision);
 }
@@ -198,7 +210,7 @@ CollisionInfo cast_ray(vec3 origin, vec3 direction) {
         vec3 scan_pos = origin + raymarch_dist * direction;
         CollisionInfo collision_info = scene(scan_pos);
         collision_id_candidate = collision_info.collided_obj_id;
-        if (collision_info.distance < RAYMARCHING_RADIUS_MIN) {
+        if (abs(collision_info.distance) < RAYMARCHING_RADIUS_MIN) {
             break;
         }
         raymarch_dist += collision_info.distance;
