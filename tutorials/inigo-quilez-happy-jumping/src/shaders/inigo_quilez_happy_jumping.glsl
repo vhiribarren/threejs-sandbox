@@ -17,6 +17,7 @@ varying vec2 v_uv;
 uniform float u_time;
 uniform float u_offset_horizontal;
 
+float time;
 
 const uint RAYMARCHING_MAX_STEPS = 200u;
 const float RAYMARCHING_RADIUS_MIN = 0.001;
@@ -91,14 +92,14 @@ CollisionInfo min_collision(CollisionInfo left, CollisionInfo right) {
 }
 
 CollisionInfo scene(vec3 pos) {
-    float t = fract(u_time);
+    float t = fract(time);
 
     float jump_y = 4.0 * t * (1.0 - t);
     //let dy = 4.0*(1.0- 2.0*t);
     //let u = normalize(vec2(1.0, -dy));
     //let v = vec2(dy, 1.0);
-    float i_time = floor(u_time);
-    float f_time = fract(u_time);
+    float i_time = floor(time);
+    float f_time = fract(time);
     vec3 center = vec3(
         0.0,
         pow(jump_y, 2.0-jump_y)+0.1,
@@ -219,7 +220,7 @@ vec3 gamma_correction(vec3 color) {
 void main() {
     vec2 size = gl_FragCoord.xy / v_uv;
     float ratio = size.x / size.y;
-    float time = 0.9* u_time;
+    time = 0.9* u_time;
     // Shift coords to be in centered right-hand coordinates
     vec2 centered_uv = v_uv - 0.5;
     vec2 canvas_pos = 2.0 * centered_uv * vec2(ratio, 1.0);
