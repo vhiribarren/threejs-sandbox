@@ -92,11 +92,17 @@ CollisionInfo min_collision(CollisionInfo left, CollisionInfo right) {
 
 CollisionInfo scene(vec3 pos) {
     float t = fract(u_time);
+
     float jump_y = 4.0 * t * (1.0 - t);
     //let dy = 4.0*(1.0- 2.0*t);
     //let u = normalize(vec2(1.0, -dy));
     //let v = vec2(dy, 1.0);
-    vec3 center = vec3(0.0, jump_y+0.1, 0.0);
+    float i_time = floor(u_time);
+    float f_time = fract(u_time);
+    vec3 center = vec3(
+        0.0,
+        pow(jump_y, 2.0-jump_y)+0.1,
+        i_time + pow(f_time, 0.7));
     float coeff_y = 0.5 + 0.5 * jump_y;
     float coeff_z = 1.0 / coeff_y;
     vec3 radius = vec3(0.25, 0.25 * coeff_y, 0.25 * coeff_z);
@@ -127,12 +133,18 @@ CollisionInfo scene(vec3 pos) {
     // Ears
     float ears = sdf_stick(xmirrored_head_pos, vec3(0.1, 0.4, -0.01), vec3(0.2, 0.55, 0.05), 0.01, 0.03);
 
+
     // Compute sdf result
     float merged_body = smooth_min(head, back_head, 0.05);
     merged_body = smooth_min(merged_body, body, 0.15);
     merged_body = smooth_min(merged_body, eyelids, 0.04);
     merged_body = smooth_max(merged_body, -mouth, 0.03);
     merged_body = smooth_min(merged_body, ears, 0.03);
+    // Wrinkles
+    float wrinkles_y = head_pos.y - 0.02 - 2.5*head_pos.x*head_pos.x;
+    float wrinkles = 0.001*sin(wrinkles_y*120.0) * (1.0-smoothstep(0.0, 0.1, abs(wrinkles_y)));
+    merged_body += wrinkles;
+
 
     CollisionInfo merged_eyes = min_collision(
         CollisionInfo(pupils, OBJ_ID_PUPILS),
@@ -207,13 +219,16 @@ vec3 gamma_correction(vec3 color) {
 void main() {
     vec2 size = gl_FragCoord.xy / v_uv;
     float ratio = size.x / size.y;
+    float time = 0.9* u_time;
     // Shift coords to be in centered right-hand coordinates
     vec2 centered_uv = v_uv - 0.5;
     vec2 canvas_pos = 2.0 * centered_uv * vec2(ratio, 1.0);
+
     // Camera parameters
-    float cam_rotation_speed = 1.5 * u_offset_horizontal; // u_time; //
-    vec3 camera_target = vec3(0.0, 0.95, 0.0);
-    vec3 camera_eye = camera_target + vec3(1.5 * sin(cam_rotation_speed), 0.0, 1.5 * cos(cam_rotation_speed));
+    float camera_angle = 1.5 * u_offset_horizontal; // u_time; //
+    float camera_distance = 0.0;//0.9*sin(time);
+    vec3 camera_target = vec3(0.0, 0.65, 0.4 + time + camera_distance);
+    vec3 camera_eye = camera_target + vec3(1.3 * cos(camera_angle), -0.250, 1.3 * sin(camera_angle));
     float canvas_distance = 1.8;
     // Transform canvas coordinates
     vec3 camera_axis_z = normalize(camera_target - camera_eye);
