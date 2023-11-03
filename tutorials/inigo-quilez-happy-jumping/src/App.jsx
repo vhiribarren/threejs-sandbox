@@ -1,22 +1,40 @@
-import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { useMemo, useRef, useEffect, useState } from "react";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
+import { Stats } from '@react-three/drei'
 import vertexShader from './shaders/vertex.glsl'
 import fragmentShader from './shaders/inigo_quilez_happy_jumping.glsl'
 
+export default App;
 
-const Fragment = () => {
 
-  const mesh = useRef();
+function App() {
+  return (
+    <Scene />
+  );
+}
+
+
+function Scene() {
+  return (
+    <Canvas camera={{ position: [0.0, 0.0, 1.0] }}>
+      <Fragment />
+      <Stats />
+    </Canvas>
+  );
+}
+
+
+function Fragment() {
+  
+  const meshRef = useRef();
   const [keys, setKeys] = useState(new Set());
   const viewport = useThree(state => state.viewport);
   const uniforms = useMemo(
     () => ({
       u_time: {
-        type: "f",
         value: 1.0,
       },
       u_offset_horizontal: {
-        type: "f",
         value: 0.0,
       },
     }),
@@ -25,16 +43,19 @@ const Fragment = () => {
 
   useFrame((state, delta) => {
     const { clock } = state;
-    mesh.current.material.uniforms.u_time.value = clock.getElapsedTime();
+    meshRef.current.material.uniforms.u_time.value = clock.getElapsedTime();
     if (keys.has("ArrowLeft")) {
-      mesh.current.material.uniforms.u_offset_horizontal.value -= delta;
+      meshRef.current.material.uniforms.u_offset_horizontal.value -= delta;
     }
     if (keys.has("ArrowRight")) {
-      mesh.current.material.uniforms.u_offset_horizontal.value += delta;
+      meshRef.current.material.uniforms.u_offset_horizontal.value += delta;
     }
   });
 
   useEffect(() => {
+    // To take into account dynamic shader update
+    meshRef.current.material.needsUpdate = true;
+
     const handleKeyDown = event => {
       setKeys(prevKeys => new Set(prevKeys).add(event.code));
     };
@@ -53,7 +74,7 @@ const Fragment = () => {
   }, []);
 
   return (
-    <mesh ref={mesh} position={[0, 0, 0]} scale={[viewport.width, viewport.height, 1]}>
+    <mesh ref={meshRef} position={[0, 0, 0]} scale={[viewport.width, viewport.height, 1]}>
       <planeGeometry args={[1, 1]} />
       <shaderMaterial
         fragmentShader={fragmentShader}
@@ -62,20 +83,4 @@ const Fragment = () => {
       />
     </mesh>
   );
-};
-
-const Scene = () => {
-  return (
-    <Canvas camera={{ position: [0.0, 0.0, 1.0] }}>
-      <Fragment />
-    </Canvas>
-  );
-};
-
-function App() {
-  return (
-    <Scene />
-  )
 }
-
-export default App
